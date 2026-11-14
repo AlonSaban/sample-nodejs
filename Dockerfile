@@ -1,25 +1,21 @@
-FROM node:22-alpine
-
-# Create non-root user for security best practices
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-# Create work dir
+# Stage 1: Install dependencies
+FROM node:22-alpine AS builder
 WORKDIR /usr/src/app
-
-# Copy dependency manifests first
 COPY package*.json ./
-
-# Install production dependencies only
 RUN npm install --omit=dev
 
-# Copy application source
+# Stage 2: minimal and clean base. Distroless runtime (no npm, no shell, minimal CVE surface)
+FROM gcr.io/distroless/nodejs22-debian12
+WORKDIR /usr/src/app
+
+COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY app.js ./
 
-# Switch to non-root user
-USER appuser
+# Distroless provides a built-in 'nonroot' user
+USER nonroot
 
-# Set default listening port (overridable at runtime via -e PORT or K8s env/ConfigMap)
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "app.js"]
+# Note: Distroless sets ENTRYPOINT to ["/nodejs/bin/node"], so CMD takes only the script path
+CMD ["app.js"]
