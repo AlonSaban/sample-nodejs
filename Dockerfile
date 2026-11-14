@@ -1,21 +1,28 @@
-# Stage 1: Install dependencies
-FROM node:22-alpine AS builder
+FROM node:22-alpine
+
 WORKDIR /usr/src/app
+
+# Copy dependency manifests first for Docker layer caching
 COPY package*.json ./
-RUN npm install --omit=dev
 
-# Stage 2: minimal and clean base. Distroless runtime (no npm, no shell, minimal CVE surface)
-FROM gcr.io/distroless/nodejs22-debian12
-WORKDIR /usr/src/app
+# 1. Patch Alpine OS packages (fixes OpenSSL/libssl3 CVEs)
+# 2. Install production dependencies only
+# 3. Strip npm/yarn/corepack from runtime image (fixes bundled npm CLI CVEs)
+RUN apk update && apk upgrade --no-cache && \
+    npm install --omit=dev && \
+    rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/bin/npm \
+           /usr/local/bin/npx \
+           /usr/local/bin/corepack \
+           /opt/yarn*
 
-COPY --from=builder /usr/src/app/node_modules ./node_modules
+# Copy application source
 COPY app.js ./
 
-# Distroless provides a built-in 'nonroot' user
-USER nonroot
+# Built-in 'node' user in node:22-alpine is UID 1000 (matches K8s runAsUser: 1000)
+USER node
 
 ENV PORT=8080
 EXPOSE 8080
 
-# Note: Distroless sets ENTRYPOINT to ["/nodejs/bin/node"], so CMD takes only the script path
-CMD ["app.js"]
+CMD ["node", "app.js"]
