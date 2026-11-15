@@ -87,13 +87,13 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: Push Verified Image to Registry
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.bump_version.outputs.new_tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAG="${{ steps.bump_version.outputs.new_tag }}"
+          docker tag "${IMAGE}:${TAG}" "${IMAGE}:latest"
+          docker push "${IMAGE}:${TAG}"
+          docker push "${IMAGE}:latest"
+
 
 # ==========================================
   # STAGE 3: GitOps Deployment (Update Helm Tag for ArgoCD)
